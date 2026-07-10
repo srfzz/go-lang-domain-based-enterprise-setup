@@ -1,12 +1,40 @@
 version: '3.8'
 
 services:
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: enterprise-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../static:/usr/share/nginx/html/static:ro
+      - ../uploads:/usr/share/nginx/html/uploads:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Application
   app:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
+    container_name: enterprise-app
     ports:
       - "8080:8080"
+    volumes:
+      - ../logs:/app/logs
+      - ../uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -15,31 +43,66 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-enterprise}
       DB_SSLMODE: disable
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: 0
+      LOG_LEVEL: info
+      LOG_FILE_PATH: /app/logs/app.log
+      DB_MAX_OPEN_CONNS: 50
+      DB_MAX_IDLE_CONNS: 25
     env_file:
       - ../.env
     restart: unless-stopped
     networks:
       - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # PostgreSQL
   postgres:
     image: postgres:15-alpine
+    container_name: enterprise-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-enterprise}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "work_mem=32MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "effective_cache_size=2GB"
+      - "-c"
+      - "statement_timeout=30s"
+      - "-c"
+      - "idle_in_transaction_session_timeout=30s"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_compression=on"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -47,10 +110,17 @@ services:
       retries: 5
     networks:
       - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # Redis
   redis:
     image: redis:7-alpine
-    command: redis-server 
+    container_name: enterprise-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -63,11 +133,19 @@ services:
       retries: 5
     networks:
       - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
+    name: enterprise_pgdata
   redisdata:
+    name: enterprise_redisdata
 
 networks:
   app-network:
+    name: enterprise_network
     driver: bridge

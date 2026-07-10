@@ -99,16 +99,15 @@ func RunMigrations(pool *pgxpool.Pool) error {
 }
 
 func createMigrationsTable(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			id SERIAL PRIMARY KEY,
-			version VARCHAR(255) NOT NULL UNIQUE,
-			name VARCHAR(255) NOT NULL,
-			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_version (version)
-		)
-	`)
-	return err
+    _, err := pool.Exec(ctx, `
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id SERIAL PRIMARY KEY,
+            version VARCHAR(255) NOT NULL UNIQUE,
+            name VARCHAR(255) NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `)
+    return err
 }
 
 func getAppliedMigrations(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
