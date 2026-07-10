@@ -1,0 +1,7 @@
+.env
+logs/
+tmp/
+keys/
+uploads/
+*.exe
+bin/
