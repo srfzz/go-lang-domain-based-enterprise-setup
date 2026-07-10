@@ -12,7 +12,7 @@ func TestAdminModule(t *testing.T) {
 // Test Admin Routes
 func TestAdminRoutes(t *testing.T) {
 	t.Log("✅ Admin routes configured")
-	
+
 	// Add actual route tests here
 	routes := []string{
 		"/api/v1/admin/users",
@@ -20,7 +20,7 @@ func TestAdminRoutes(t *testing.T) {
 		"/api/v1/admin/roles",
 		"/api/v1/admin/permissions",
 	}
-	
+
 	for _, route := range routes {
 		t.Logf("  ✅ Route: %s", route)
 	}
