@@ -8,6 +8,7 @@ import (
 
 	"github.com/yourorg/enterprise-api/internal/config"
 	"github.com/yourorg/enterprise-api/internal/middleware"
+	"github.com/yourorg/enterprise-api/internal/modules/admin"
 	"github.com/yourorg/enterprise-api/internal/modules/auth"
 	"github.com/yourorg/enterprise-api/internal/modules/incident"
 	"github.com/yourorg/enterprise-api/internal/modules/websocket"
@@ -27,6 +28,7 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, redisClient *redis.Client) *gin
 	})
 
 	auth.RegisterRoutes(r, db, redisClient, cfg)
+	admin.RegisterRoutes(r, db, redisClient, cfg)
 	incident.RegisterRoutes(r, db, redisClient, cfg)
 	websocket.RegisterRoutes(r, db, redisClient, cfg)
 

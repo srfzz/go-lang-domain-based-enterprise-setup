@@ -12,6 +12,7 @@ import (
 
 	"github.com/yourorg/enterprise-api/internal/config"
 	"github.com/yourorg/enterprise-api/internal/database"
+	"github.com/yourorg/enterprise-api/internal/modules/admin/service"
 	"github.com/yourorg/enterprise-api/internal/router"
 	"github.com/yourorg/enterprise-api/internal/shared/logger"
 	"github.com/yourorg/enterprise-api/internal/shared/storage"
@@ -55,8 +56,11 @@ func main() {
 	}
 	logger.Info("storage backend initialized", zap.String("driver", cfg.StorageDriver))
 
-	// Make storage accessible via global or pass to modules
 	_ = store
+
+	// Seed default admin user, roles, and permissions
+	adminSvc := service.NewAdminService(db, redisClient, cfg)
+	adminSvc.SeedDefaultAdmin(context.Background())
 
 	r := router.Setup(cfg, db, redisClient)
 

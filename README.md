@@ -20,6 +20,7 @@ Built with **Gin**, **pgx**, **Redis**, **Zap**, and clean **feature-based archi
 | **Session Limit Enforcement** | Configurable max active sessions per user (default 2); oldest auto-evicted |
 | **JWT Blacklist** | Revoked tokens blocked via Redis until natural expiry |
 | **RBAC** | Action + resource permissions, roles with categories, user-role assignments |
+| **Admin Panel** | Built-in admin user, role & permission CRUD, user management API |
 | **Rate Limiting** | Per IP + device ID sliding window via Redis |
 | **Token Bucket Throttling** | In-process rate limiter using `golang.org/x/time/rate` |
 | **Activity Audit Log** | Async writes to PostgreSQL with IP, user agent, device ID |
@@ -86,6 +87,24 @@ The server starts at **http://localhost:8080**. Health check: `GET /health`
 | `POST` | `/refresh` | No | Rotate refresh token |
 | `POST` | `/logout` | Yes | Revoke tokens + end session |
 
+### Admin (`/api/v1/admin`) — requires `manage:admin` permission
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/users` | `manage:admin` | List all users |
+| `GET` | `/users/:id` | `manage:admin` | Get user details |
+| `POST` | `/users` | `manage:admin` | Create user with roles |
+| `PUT` | `/users/:id/roles` | `manage:admin` | Assign roles to user |
+| `GET` | `/roles` | `manage:admin` | List all roles |
+| `POST` | `/roles` | `manage:admin` | Create role |
+| `PUT` | `/roles/:id` | `manage:admin` | Update role |
+| `DELETE` | `/roles/:id` | `manage:admin` | Delete role |
+| `PUT` | `/roles/:id/permissions` | `manage:admin` | Assign permissions to role |
+| `GET` | `/permissions` | `manage:admin` | List all permissions |
+| `POST` | `/permissions` | `manage:admin` | Create permission |
+| `PUT` | `/permissions/:id` | `manage:admin` | Update permission |
+| `DELETE` | `/permissions/:id` | `manage:admin` | Delete permission |
+
 ### Incidents (`/api/v1/incidents`) — RBAC protected
 
 | Method | Path | Permission | Description |
@@ -102,12 +121,20 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -d '{"email":"user@example.com","password":"securepass123","full_name":"John Doe"}'
 ```
 
-**Login**
+**Login (default admin)**
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -H "X-Device-ID: my-device" \
-  -d '{"email":"user@example.com","password":"securepass123"}'
+  -d '{"email":"admin@enterprise.com","password":"Admin123!"}'
+```
+
+**Create a user with roles (admin only)**
+```bash
+curl -X POST http://localhost:8080/api/v1/admin/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_access_token>" \
+  -d '{"email":"operator@example.com","password":"securepass123","full_name":"Operator User","role_ids":["<role-uuid>"]}'
 ```
 
 **Authenticated request**
@@ -138,6 +165,13 @@ enterprise-api/
 │   │   ├── throttler.go
 │   │   └── rbac.go
 │   ├── modules/                 # Feature modules
+│   │   ├── admin/               # Admin panel: user, role & permission management
+│   │   │   ├── domain/          # Role, Permission entities
+│   │   │   ├── dto/             # Request & response structs
+│   │   │   ├── repository/      # RoleRepo, PermissionRepo, AdminUserRepo
+│   │   │   ├── service/         # Admin business logic + default admin seeding
+│   │   │   ├── handler/         # HTTP handlers
+│   │   │   └── routes.go
 │   │   ├── auth/                # Registration, login, logout, refresh, sessions
 │   │   │   ├── domain/          # User, RefreshToken, Session entities
 │   │   │   ├── dto/             # Request & response structs
@@ -163,6 +197,31 @@ enterprise-api/
 ├── go.mod
 └── Makefile
 ```
+
+---
+
+## Default Admin
+
+On first startup, the API automatically seeds a default admin user, the `admin` role, and all base permissions. The admin user is assigned the `admin` role which has every permission.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_EMAIL` | `admin@enterprise.com` | Default admin login email |
+| `ADMIN_PASSWORD` | `Admin123!` | Default admin password |
+| `ADMIN_NAME` | `System Admin` | Display name |
+
+**Use the admin credentials to login and create additional users with specific roles.**
+
+---
+
+## Admin Panel API
+
+All admin endpoints are under `/api/v1/admin` and require the `manage:admin` permission (granted to the default admin role). Use these to:
+
+- **Create users** with specific role assignments
+- **Manage roles** — create, update, delete, assign permissions
+- **Manage permissions** — create, update, delete
+- **Assign roles** to any user
 
 ---
 
@@ -203,6 +262,8 @@ Set `STORAGE_DRIVER=local` for local filesystem, or `s3`/`r2` for S3-compatible 
 | `JWT_REFRESH_EXPIRY_DAYS` | `7` | Refresh token TTL |
 | `RATE_LIMIT_REQUESTS` | `100` | Max requests per window |
 | `MAX_ACTIVE_SESSIONS` | `2` | Max concurrent sessions per user |
+| `ADMIN_EMAIL` | `admin@enterprise.com` | Default admin email |
+| `ADMIN_PASSWORD` | `Admin123!` | Default admin password |
 | `STORAGE_DRIVER` | `local` | Storage backend: `local`, `s3`, `r2` |
 
 See `.env.example` for the full list.

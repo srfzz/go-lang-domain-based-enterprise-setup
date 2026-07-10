@@ -49,6 +49,10 @@ type Config struct {
 	StorageS3UseSSL   bool
 
 	MaxActiveSessions int
+
+	AdminEmail    string
+	AdminPassword string
+	AdminName     string
 }
 
 func Load() (*Config, error) {
@@ -94,6 +98,9 @@ func Load() (*Config, error) {
 		StorageS3SecretKey:  viper.GetString("STORAGE_S3_SECRET_KEY"),
 		StorageS3UseSSL:     viper.GetBool("STORAGE_S3_USE_SSL"),
 		MaxActiveSessions:   viper.GetInt("MAX_ACTIVE_SESSIONS"),
+		AdminEmail:          viper.GetString("ADMIN_EMAIL"),
+		AdminPassword:       viper.GetString("ADMIN_PASSWORD"),
+		AdminName:           viper.GetString("ADMIN_NAME"),
 	}
 
 	if cfg.MaxActiveSessions <= 0 {
