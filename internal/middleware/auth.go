@@ -12,7 +12,7 @@ import (
 	"github.com/yourorg/enterprise-api/internal/shared/utils"
 )
 
-var tokenCache = utils.NewTokenCache(5*time.Minute, 10000)
+var tokenCache = utils.NewTokenCache(5*time.Minute, 100000)
 
 func AuthRequired(redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {

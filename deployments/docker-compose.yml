@@ -28,8 +28,6 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: enterprise
       POOL_MODE: transaction
-      MAX_CLIENT_CONN: 200
-      DEFAULT_POOL_SIZE: 25
     volumes:
       - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
 

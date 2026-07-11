@@ -23,9 +23,10 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, redisClient *redis.Client) *gin
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Gzip())
-	r.Use(middleware.ActivityLogger(db))
-	r.Use(middleware.RateLimiter(redisClient, cfg.RateLimitRequests, cfg.RateLimitDurationSec))
+	// In-memory throttle first (cheapest check), then Redis rate limiter, then DB logger
 	r.Use(middleware.Throttle(cfg.ThrottleBurst, rate.Limit(cfg.ThrottleRate)))
+	r.Use(middleware.RateLimiter(redisClient, cfg.RateLimitRequests, cfg.RateLimitDurationSec))
+	r.Use(middleware.ActivityLogger(db))
 
 	r.GET("/health", func(c *gin.Context) {
 		stats := db.Stat()
