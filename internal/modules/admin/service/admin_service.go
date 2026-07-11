@@ -19,12 +19,12 @@ import (
 )
 
 type AdminService struct {
-	userRepo  *repository.AdminUserRepository
-	roleRepo  *repository.RoleRepository
-	permRepo  *repository.PermissionRepository
-	db        *pgxpool.Pool
-	redis     *redis.Client
-	cfg       *config.Config
+	userRepo *repository.AdminUserRepository
+	roleRepo *repository.RoleRepository
+	permRepo *repository.PermissionRepository
+	db       *pgxpool.Pool
+	redis    *redis.Client
+	cfg      *config.Config
 }
 
 func NewAdminService(db *pgxpool.Pool, redisClient *redis.Client, cfg *config.Config) *AdminService {
@@ -129,9 +129,9 @@ func (s *AdminService) seedPermissions(ctx context.Context, adminRoleID uuid.UUI
 	var permIDs []uuid.UUID
 	for _, bp := range basePermissions {
 		p := &domain.Permission{
-			Name:     bp.Name,
-			Action:   bp.Action,
-			Resource: bp.Resource,
+			Name:        bp.Name,
+			Action:      bp.Action,
+			Resource:    bp.Resource,
 			Description: bp.Desc,
 		}
 		if err := s.permRepo.Create(ctx, p); err != nil {

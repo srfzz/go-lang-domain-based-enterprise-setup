@@ -13,10 +13,10 @@ type cacheEntry struct {
 // TokenCache is a simple in-memory TTL cache for validated JWT claims.
 // Avoids RSA verification + Redis round-trip on every request.
 type TokenCache struct {
-	mu       sync.RWMutex
-	entries  map[string]*cacheEntry
-	ttl      time.Duration
-	maxSize  int
+	mu      sync.RWMutex
+	entries map[string]*cacheEntry
+	ttl     time.Duration
+	maxSize int
 }
 
 func NewTokenCache(ttl time.Duration, maxSize int) *TokenCache {

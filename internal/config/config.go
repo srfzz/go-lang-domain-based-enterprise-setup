@@ -21,7 +21,7 @@ type Config struct {
 	DBMaxOpenConns int
 	DBMaxIdleConns int
 
-	UsePgBouncer bool
+	UsePgBouncer  bool
 	PgBouncerPort string
 
 	RedisHost     string
@@ -42,14 +42,14 @@ type Config struct {
 	LogLevel    string
 	LogFilePath string
 
-	StorageDriver     string
-	StorageLocalPath  string
-	StorageS3Endpoint string
-	StorageS3Region   string
-	StorageS3Bucket   string
+	StorageDriver      string
+	StorageLocalPath   string
+	StorageS3Endpoint  string
+	StorageS3Region    string
+	StorageS3Bucket    string
 	StorageS3AccessKey string
 	StorageS3SecretKey string
-	StorageS3UseSSL   bool
+	StorageS3UseSSL    bool
 
 	MaxActiveSessions int
 

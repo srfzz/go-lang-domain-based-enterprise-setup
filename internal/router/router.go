@@ -30,12 +30,12 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, redisClient *redis.Client) *gin
 	r.GET("/health", func(c *gin.Context) {
 		stats := db.Stat()
 		c.JSON(200, gin.H{
-			"status":           "ok",
-			"db_acquire_count": stats.AcquireCount(),
+			"status":              "ok",
+			"db_acquire_count":    stats.AcquireCount(),
 			"db_acquire_duration": stats.AcquireDuration().String(),
-			"db_idle_conns":    stats.IdleConns(),
-			"db_total_conns":   stats.TotalConns(),
-			"db_max_conns":     stats.MaxConns(),
+			"db_idle_conns":       stats.IdleConns(),
+			"db_total_conns":      stats.TotalConns(),
+			"db_max_conns":        stats.MaxConns(),
 		})
 	})
 
