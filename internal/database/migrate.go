@@ -45,7 +45,7 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	// 4. Run pending migrations
 	for _, f := range files {
 		version := extractVersion(f)
-		
+
 		// Skip if already applied
 		if applied[version] {
 			fmt.Printf("⏭️ Migration %s already applied, skipping\n", version)
@@ -53,7 +53,7 @@ func RunMigrations(pool *pgxpool.Pool) error {
 		}
 
 		fmt.Printf("🔄 Running migration: %s\n", version)
-		
+
 		// Read migration file
 		data, err := migrationsFS.ReadFile(f)
 		if err != nil {
@@ -61,7 +61,7 @@ func RunMigrations(pool *pgxpool.Pool) error {
 		}
 
 		sql := string(data)
-		
+
 		// Fix CREATE TABLE statements to use IF NOT EXISTS
 		sql = fixCreateTableStatements(sql)
 
@@ -99,7 +99,7 @@ func RunMigrations(pool *pgxpool.Pool) error {
 }
 
 func createMigrationsTable(ctx context.Context, pool *pgxpool.Pool) error {
-    _, err := pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
         CREATE TABLE IF NOT EXISTS schema_migrations (
             id SERIAL PRIMARY KEY,
             version VARCHAR(255) NOT NULL UNIQUE,
@@ -107,12 +107,12 @@ func createMigrationsTable(ctx context.Context, pool *pgxpool.Pool) error {
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `)
-    return err
+	return err
 }
 
 func getAppliedMigrations(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
 	applied := make(map[string]bool)
-	
+
 	rows, err := pool.Query(ctx, "SELECT version FROM schema_migrations")
 	if err != nil {
 		return nil, err
@@ -159,18 +159,18 @@ func getMigrationName(path string) string {
 func fixCreateTableStatements(sql string) string {
 	// Split into individual statements
 	statements := strings.Split(sql, ";")
-	
+
 	for i, stmt := range statements {
 		trimmed := strings.TrimSpace(stmt)
 		if trimmed == "" {
 			continue
 		}
-	
+
 		upper := strings.ToUpper(trimmed)
 		if strings.Contains(upper, "CREATE TABLE") && !strings.Contains(upper, "IF NOT EXISTS") {
 			statements[i] = strings.Replace(trimmed, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
 		}
 	}
-	
+
 	return strings.Join(statements, ";")
 }
