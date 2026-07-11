@@ -71,13 +71,15 @@ func LoadKeys(privatePath, publicPath string) error {
 }
 
 func GenerateAccessToken(userID uuid.UUID, email string, ttl time.Duration) (string, time.Time, error) {
-	exp := time.Now().Add(ttl)
+	now := time.Now()
+	exp := now.Add(ttl)
 	claims := AccessClaims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(exp),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now.Add(-30 * time.Second)), // 30s clock skew tolerance
 			ID:        uuid.NewString(),
 		},
 	}
@@ -94,6 +96,7 @@ func GenerateRefreshToken(userID uuid.UUID, ttl time.Duration) (string, time.Tim
 		TokenID: tokenID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(exp),
+			NotBefore: jwt.NewNumericDate(time.Now().Add(-30 * time.Second)),
 			ID:        tokenID,
 		},
 	}
@@ -108,7 +111,7 @@ func ValidateAccessToken(tokenStr string) (*AccessClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return publicKey, nil
-	})
+	}, jwt.WithLeeway(30*time.Second))
 	if err != nil {
 		return nil, err
 	}

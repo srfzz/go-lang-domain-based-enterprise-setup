@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,8 +25,15 @@ func (r *RoleRepository) Create(ctx context.Context, role *domain.Role) error {
 	).Scan(&role.ID, &role.CreatedAt)
 }
 
-func (r *RoleRepository) FindAll(ctx context.Context) ([]domain.Role, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, name, category, description, created_at FROM roles ORDER BY name`)
+func (r *RoleRepository) FindAll(ctx context.Context, limit, offset int) ([]domain.Role, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT id, name, category, description, created_at FROM roles ORDER BY name LIMIT %d OFFSET %d`, limit, offset)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +47,12 @@ func (r *RoleRepository) FindAll(ctx context.Context) ([]domain.Role, error) {
 		roles = append(roles, role)
 	}
 	return roles, nil
+}
+
+func (r *RoleRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM roles`).Scan(&count)
+	return count, err
 }
 
 func (r *RoleRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Role, error) {

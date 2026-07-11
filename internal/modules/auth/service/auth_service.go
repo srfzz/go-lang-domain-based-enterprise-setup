@@ -21,6 +21,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const bcryptCost = 12
+
 type AuthService struct {
 	userRepo    *repository.UserRepository
 	sessionRepo *repository.SessionRepository
@@ -40,7 +42,7 @@ func NewAuthService(db *pgxpool.Pool, redisClient *redis.Client, cfg *config.Con
 }
 
 func (s *AuthService) Register(ctx context.Context, req dto.RegisterRequest) (*dto.AuthResponse, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		return nil, err
 	}
@@ -56,17 +58,51 @@ func (s *AuthService) Register(ctx context.Context, req dto.RegisterRequest) (*d
 }
 
 func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest, deviceID, ipAddress, userAgent string) (*dto.AuthResponse, error) {
+	// Brute-force / account lockout check
+	if err := s.checkLoginAttempts(ctx, req.Email, ipAddress); err != nil {
+		return nil, err
+	}
+
 	user, err := s.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil || user == nil {
+		s.recordFailedAttempt(ctx, req.Email, ipAddress)
 		return nil, fmt.Errorf("invalid email or password")
 	}
 	if !user.IsActive {
 		return nil, fmt.Errorf("account is disabled")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		s.recordFailedAttempt(ctx, req.Email, ipAddress)
 		return nil, fmt.Errorf("invalid email or password")
 	}
+
+	// Clear failed attempts on success
+	s.redis.Del(ctx, fmt.Sprintf("login_attempts:%s", req.Email))
+	s.redis.Del(ctx, fmt.Sprintf("login_lockout:%s", req.Email))
+
 	return s.generateTokens(ctx, user, deviceID, ipAddress, userAgent)
+}
+
+func (s *AuthService) checkLoginAttempts(ctx context.Context, email, ip string) error {
+	lockoutKey := fmt.Sprintf("login_lockout:%s", email)
+	locked, _ := s.redis.Exists(ctx, lockoutKey).Result()
+	if locked > 0 {
+		ttl, _ := s.redis.TTL(ctx, lockoutKey).Result()
+		return fmt.Errorf("account locked. Try again in %d minutes", int(ttl.Minutes())+1)
+	}
+	return nil
+}
+
+func (s *AuthService) recordFailedAttempt(ctx context.Context, email, ip string) {
+	key := fmt.Sprintf("login_attempts:%s", email)
+	attempts, _ := s.redis.Incr(ctx, key).Result()
+	s.redis.Expire(ctx, key, 15*time.Minute)
+
+	if attempts >= 5 {
+		lockoutKey := fmt.Sprintf("login_lockout:%s", email)
+		s.redis.Set(ctx, lockoutKey, "locked", 15*time.Minute)
+		logger.Warn("account locked due to failed attempts", zap.String("email", email), zap.String("ip", ip))
+	}
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken, deviceID, ipAddress, userAgent string) (*dto.AuthResponse, error) {
@@ -84,7 +120,6 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken, deviceID, 
 		return nil, fmt.Errorf("refresh token expired")
 	}
 
-	// Remove the old session and refresh token (rotation)
 	s.sessionRepo.DeleteByRefreshHash(ctx, hashed)
 	s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE id=$1`, token.ID)
 
@@ -100,7 +135,8 @@ func (s *AuthService) Logout(ctx context.Context, accessToken, refreshToken stri
 	if err == nil {
 		remaining := time.Until(claims.ExpiresAt.Time)
 		if remaining > 0 {
-			key := fmt.Sprintf("blacklist:access:%s", accessToken)
+			tokenHash := hashKey(accessToken)
+			key := fmt.Sprintf("blacklist:%s", tokenHash)
 			s.redis.Set(ctx, key, "revoked", remaining)
 		}
 	}
@@ -124,7 +160,6 @@ func (s *AuthService) generateTokens(ctx context.Context, user *domain.User, dev
 
 	hashed := hashToken(refreshTokenStr)
 
-	// Store refresh token
 	_, err = s.db.Exec(ctx,
 		`INSERT INTO refresh_tokens (user_id, token_hash, device_id, ip_address, expires_at) VALUES ($1, $2, $3, $4::inet, $5)`,
 		user.ID, hashed, deviceID, ipAddress, refreshExp)
@@ -132,7 +167,6 @@ func (s *AuthService) generateTokens(ctx context.Context, user *domain.User, dev
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
-	// Create session
 	session := &domain.Session{
 		UserID:           user.ID,
 		RefreshTokenHash: hashed,
@@ -144,7 +178,6 @@ func (s *AuthService) generateTokens(ctx context.Context, user *domain.User, dev
 		logger.Error("failed to create session", zap.Error(err))
 	}
 
-	// Enforce max active sessions — evict oldest if over limit
 	s.enforceSessionLimit(ctx, user.ID)
 
 	return &dto.AuthResponse{
@@ -164,29 +197,30 @@ func (s *AuthService) enforceSessionLimit(ctx context.Context, userID uuid.UUID)
 	if maxSessions <= 0 {
 		return
 	}
-	for {
-		count, err := s.sessionRepo.CountByUserID(ctx, userID)
-		if err != nil || count <= maxSessions {
-			break
-		}
-		oldest, err := s.sessionRepo.FindOldestByUserID(ctx, userID)
-		if err != nil || oldest == nil {
-			break
-		}
-		// Delete the oldest session and its refresh token
-		if err := s.sessionRepo.DeleteByID(ctx, oldest.ID); err != nil {
-			logger.Error("failed to evict oldest session", zap.Error(err))
-			break
-		}
-		s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE token_hash=$1`, oldest.RefreshTokenHash)
-		logger.Info("evicted oldest session",
-			zap.String("user_id", userID.String()),
-			zap.String("evicted_session_id", oldest.ID.String()),
-		)
+	// Single SQL: delete sessions beyond the limit, keeping the newest N
+	_, err := s.db.Exec(ctx,
+		`DELETE FROM sessions WHERE user_id=$1 AND id NOT IN (
+			SELECT id FROM sessions WHERE user_id=$1 ORDER BY last_accessed_at DESC LIMIT $2
+		)`, userID, maxSessions)
+	if err != nil {
+		logger.Error("failed to enforce session limit", zap.Error(err))
+	}
+	// Also clean up orphaned refresh tokens
+	_, err = s.db.Exec(ctx,
+		`DELETE FROM refresh_tokens WHERE user_id=$1 AND token_hash NOT IN (
+			SELECT refresh_token_hash FROM sessions WHERE user_id=$1
+		) AND expires_at > now()`, userID)
+	if err != nil {
+		logger.Error("failed to cleanup orphaned refresh tokens", zap.Error(err))
 	}
 }
 
 func hashToken(token string) string {
 	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+func hashKey(s string) string {
+	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
 }

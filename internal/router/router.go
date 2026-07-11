@@ -18,13 +18,25 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, redisClient *redis.Client) *gin
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
+	r.MaxMultipartMemory = cfg.MaxRequestBodySize
+
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
+	r.Use(middleware.Gzip())
 	r.Use(middleware.ActivityLogger(db))
 	r.Use(middleware.RateLimiter(redisClient, cfg.RateLimitRequests, cfg.RateLimitDurationSec))
 	r.Use(middleware.Throttle(cfg.ThrottleBurst, rate.Limit(cfg.ThrottleRate)))
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		stats := db.Stat()
+		c.JSON(200, gin.H{
+			"status":           "ok",
+			"db_acquire_count": stats.AcquireCount(),
+			"db_acquire_duration": stats.AcquireDuration().String(),
+			"db_idle_conns":    stats.IdleConns(),
+			"db_total_conns":   stats.TotalConns(),
+			"db_max_conns":     stats.MaxConns(),
+		})
 	})
 
 	auth.RegisterRoutes(r, db, redisClient, cfg)

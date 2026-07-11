@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,8 +25,15 @@ func (r *PermissionRepository) Create(ctx context.Context, p *domain.Permission)
 	).Scan(&p.ID, &p.CreatedAt)
 }
 
-func (r *PermissionRepository) FindAll(ctx context.Context) ([]domain.Permission, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, name, action, resource, description, created_at FROM permissions ORDER BY resource, action`)
+func (r *PermissionRepository) FindAll(ctx context.Context, limit, offset int) ([]domain.Permission, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT id, name, action, resource, description, created_at FROM permissions ORDER BY resource, action LIMIT %d OFFSET %d`, limit, offset)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +47,12 @@ func (r *PermissionRepository) FindAll(ctx context.Context) ([]domain.Permission
 		perms = append(perms, p)
 	}
 	return perms, nil
+}
+
+func (r *PermissionRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM permissions`).Scan(&count)
+	return count, err
 }
 
 func (r *PermissionRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Permission, error) {

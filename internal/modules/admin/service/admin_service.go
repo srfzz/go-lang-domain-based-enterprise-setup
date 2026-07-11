@@ -82,12 +82,11 @@ func (s *AdminService) SeedDefaultAdmin(ctx context.Context) {
 	s.seedPermissions(ctx, adminRole.ID)
 
 	// Create admin user
-	hash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), 12)
 	if err != nil {
 		logger.Error("failed to hash admin password", zap.Error(err))
 		return
 	}
-
 	adminUser := &authdomain.User{
 		Email:        adminEmail,
 		PasswordHash: string(hash),
@@ -151,10 +150,14 @@ func (s *AdminService) seedPermissions(ctx context.Context, adminRoleID uuid.UUI
 
 // --- User management ---
 
-func (s *AdminService) ListUsers(ctx context.Context) ([]dto.UserResponse, error) {
-	users, err := s.userRepo.FindAll(ctx)
+func (s *AdminService) ListUsers(ctx context.Context, limit, offset int) ([]dto.UserResponse, int, error) {
+	users, err := s.userRepo.FindAll(ctx, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := s.userRepo.Count(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 	var resp []dto.UserResponse
 	for _, u := range users {
@@ -177,7 +180,7 @@ func (s *AdminService) ListUsers(ctx context.Context) ([]dto.UserResponse, error
 			CreatedAt: u.CreatedAt,
 		})
 	}
-	return resp, nil
+	return resp, total, nil
 }
 
 func (s *AdminService) CreateUser(ctx context.Context, req dto.CreateUserRequest) (*dto.UserResponse, error) {
@@ -186,7 +189,7 @@ func (s *AdminService) CreateUser(ctx context.Context, req dto.CreateUserRequest
 		return nil, fmt.Errorf("email already exists")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
 		return nil, err
 	}
@@ -261,10 +264,14 @@ func (s *AdminService) GetUser(ctx context.Context, id uuid.UUID) (*dto.UserResp
 
 // --- Role management ---
 
-func (s *AdminService) ListRoles(ctx context.Context) ([]dto.RoleResponse, error) {
-	roles, err := s.roleRepo.FindAll(ctx)
+func (s *AdminService) ListRoles(ctx context.Context, limit, offset int) ([]dto.RoleResponse, int, error) {
+	roles, err := s.roleRepo.FindAll(ctx, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := s.roleRepo.Count(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 	var resp []dto.RoleResponse
 	for _, r := range roles {
@@ -288,7 +295,7 @@ func (s *AdminService) ListRoles(ctx context.Context) ([]dto.RoleResponse, error
 			CreatedAt:   r.CreatedAt,
 		})
 	}
-	return resp, nil
+	return resp, total, nil
 }
 
 func (s *AdminService) CreateRole(ctx context.Context, req dto.CreateRoleRequest) (*dto.RoleResponse, error) {
@@ -348,10 +355,14 @@ func (s *AdminService) AssignPermissions(ctx context.Context, roleID uuid.UUID, 
 
 // --- Permission management ---
 
-func (s *AdminService) ListPermissions(ctx context.Context) ([]dto.PermissionResponse, error) {
-	perms, err := s.permRepo.FindAll(ctx)
+func (s *AdminService) ListPermissions(ctx context.Context, limit, offset int) ([]dto.PermissionResponse, int, error) {
+	perms, err := s.permRepo.FindAll(ctx, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := s.permRepo.Count(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 	var resp []dto.PermissionResponse
 	for _, p := range perms {
@@ -364,7 +375,7 @@ func (s *AdminService) ListPermissions(ctx context.Context) ([]dto.PermissionRes
 			CreatedAt:   p.CreatedAt,
 		})
 	}
-	return resp, nil
+	return resp, total, nil
 }
 
 func (s *AdminService) CreatePermission(ctx context.Context, req dto.CreatePermissionRequest) (*dto.PermissionResponse, error) {

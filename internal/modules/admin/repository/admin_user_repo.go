@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,8 +48,17 @@ func (r *AdminUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*auth
 	return u, err
 }
 
-func (r *AdminUserRepository) FindAll(ctx context.Context) ([]authdomain.User, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, email, password_hash, full_name, is_active, created_at, updated_at FROM users ORDER BY created_at DESC`)
+func (r *AdminUserRepository) FindAll(ctx context.Context, limit, offset int) ([]authdomain.User, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(
+		`SELECT id, email, password_hash, full_name, is_active, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT %d OFFSET %d`,
+		limit, offset)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +72,12 @@ func (r *AdminUserRepository) FindAll(ctx context.Context) ([]authdomain.User, e
 		users = append(users, u)
 	}
 	return users, nil
+}
+
+func (r *AdminUserRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	return count, err
 }
 
 func (r *AdminUserRepository) AssignRole(ctx context.Context, userID, roleID uuid.UUID) error {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/yourorg/enterprise-api/internal/modules/incident/domain"
@@ -21,8 +22,17 @@ func (r *IncidentRepository) Create(ctx context.Context, inc *domain.Incident) e
 		Scan(&inc.ID, &inc.CreatedAt, &inc.UpdatedAt)
 }
 
-func (r *IncidentRepository) List(ctx context.Context) ([]domain.Incident, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, title, description, status, severity, reported_by, created_at, updated_at FROM incidents ORDER BY created_at DESC`)
+func (r *IncidentRepository) List(ctx context.Context, limit, offset int) ([]domain.Incident, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(
+		`SELECT id, title, description, status, severity, reported_by, created_at, updated_at FROM incidents ORDER BY created_at DESC LIMIT %d OFFSET %d`,
+		limit, offset)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -36,4 +46,10 @@ func (r *IncidentRepository) List(ctx context.Context) ([]domain.Incident, error
 		incidents = append(incidents, i)
 	}
 	return incidents, nil
+}
+
+func (r *IncidentRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM incidents`).Scan(&count)
+	return count, err
 }

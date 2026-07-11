@@ -40,10 +40,14 @@ func (s *IncidentService) Create(ctx context.Context, req dto.CreateIncidentRequ
 	}, nil
 }
 
-func (s *IncidentService) List(ctx context.Context) ([]dto.IncidentResponse, error) {
-	incidents, err := s.repo.List(ctx)
+func (s *IncidentService) List(ctx context.Context, limit, offset int) ([]dto.IncidentResponse, int, error) {
+	incidents, err := s.repo.List(ctx, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	total, err := s.repo.Count(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 	var resp []dto.IncidentResponse
 	for _, i := range incidents {
@@ -58,5 +62,5 @@ func (s *IncidentService) List(ctx context.Context) ([]dto.IncidentResponse, err
 			UpdatedAt:   i.UpdatedAt,
 		})
 	}
-	return resp, nil
+	return resp, total, nil
 }

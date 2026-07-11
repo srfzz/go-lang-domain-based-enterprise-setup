@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,12 +21,14 @@ func NewAdminHandler(svc *service.AdminService) *AdminHandler {
 // --- Users ---
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
-	resp, err := h.svc.ListUsers(c.Request.Context())
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	resp, total, err := h.svc.ListUsers(c.Request.Context(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{"data": resp, "total": total, "limit": limit, "offset": offset})
 }
 
 func (h *AdminHandler) GetUser(c *gin.Context) {
@@ -77,12 +80,14 @@ func (h *AdminHandler) AssignRoles(c *gin.Context) {
 // --- Roles ---
 
 func (h *AdminHandler) ListRoles(c *gin.Context) {
-	resp, err := h.svc.ListRoles(c.Request.Context())
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	resp, total, err := h.svc.ListRoles(c.Request.Context(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{"data": resp, "total": total, "limit": limit, "offset": offset})
 }
 
 func (h *AdminHandler) CreateRole(c *gin.Context) {
@@ -152,12 +157,14 @@ func (h *AdminHandler) AssignPermissions(c *gin.Context) {
 // --- Permissions ---
 
 func (h *AdminHandler) ListPermissions(c *gin.Context) {
-	resp, err := h.svc.ListPermissions(c.Request.Context())
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	resp, total, err := h.svc.ListPermissions(c.Request.Context(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{"data": resp, "total": total, "limit": limit, "offset": offset})
 }
 
 func (h *AdminHandler) CreatePermission(c *gin.Context) {
